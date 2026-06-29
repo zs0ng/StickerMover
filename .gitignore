@@ -1,0 +1,12 @@
+.DS_Store
+__pycache__/
+*.pyc
+
+mememover_export/
+RecoveredFavorites/
+favorites.json
+fav.archive
+summary.json
+persistence_manifest.json
+thumb_manifest.json
+recovered_favorites_manifest.json

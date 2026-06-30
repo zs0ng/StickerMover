@@ -1,6 +1,6 @@
 # StickerMover
 
-Export and recover WeChat favorite stickers on macOS.
+Export local WeChat and QQ stickers on macOS.
 
 ## What this repo contains
 
@@ -10,6 +10,10 @@ Export and recover WeChat favorite stickers on macOS.
 - `download_wechat_favorites.py`
   - Reads parsed favorite sticker URLs from `favorites.json`.
   - Downloads recoverable stickers back into normal image files.
+- `qq_sticker_export.py`
+  - Scans the local macOS QQ `nt_data/Emoji` directory.
+  - Exports `personal_emoji` by default.
+  - Can optionally export `emoji-recv` and `marketface`.
 
 ## What this repo does not contain
 
@@ -20,20 +24,35 @@ Export and recover WeChat favorite stickers on macOS.
 
 ## Usage
 
-1. Update the WeChat source paths in the scripts for your machine.
-2. Run:
+1. Run the WeChat export:
 
 ```bash
-python3 mememover_export.py
+python3 mememover_export.py /path/to/Stickers
 ```
 
-3. If `favorites.json` is available and you want to recover image files:
+2. If `favorites.json` is available and you want to recover image files:
 
 ```bash
-python3 download_wechat_favorites.py
+python3 download_wechat_favorites.py test/mememover_export/favorites.json
 ```
+
+3. Run the QQ export:
+
+```bash
+python3 qq_sticker_export.py /path/to/QQ/nt_data/Emoji
+```
+
+4. If you also want QQ cache folders:
+
+```bash
+python3 qq_sticker_export.py /path/to/QQ/nt_data/Emoji --include-emoji-recv --include-marketface
+```
+
+By default, generated files are written under `test/`, with WeChat and QQ outputs separated into different subdirectories.
 
 ## Notes
 
 - The raw files under WeChat `Stickers/Persistence` are often not directly viewable images.
 - Recovery of normal image files may depend on URLs extracted from WeChat metadata.
+- QQ export defaults to `personal_emoji`, which is the closest local folder to your own collected sticker set.
+- `emoji-recv` and `marketface` are optional because they are mostly cache or downloaded pack assets.

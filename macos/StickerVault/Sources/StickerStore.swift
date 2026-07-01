@@ -1,6 +1,7 @@
 import Foundation
 
 enum StickerPlatform: String, CaseIterable, Identifiable {
+    case all = "All"
     case qq = "QQ"
     case wechat = "WeChat"
 
@@ -8,6 +9,8 @@ enum StickerPlatform: String, CaseIterable, Identifiable {
 
     var emptyMessage: String {
         switch self {
+        case .all:
+            return "No stickers found yet."
         case .qq:
             return "No QQ personal emoji found on this Mac yet."
         case .wechat:
@@ -28,6 +31,11 @@ struct StickerItem: Hashable, Identifiable {
         let name = URL(fileURLWithPath: filename).deletingPathExtension().lastPathComponent
         return name.isEmpty ? filename : name
     }
+
+    var fileTypeLabel: String {
+        let ext = URL(fileURLWithPath: filename).pathExtension
+        return ext.isEmpty ? "file" : ext.lowercased()
+    }
 }
 
 struct StickerScanResult {
@@ -38,10 +46,12 @@ struct StickerScanResult {
 @MainActor
 final class StickerStore: ObservableObject {
     @Published private(set) var stickersByPlatform: [StickerPlatform: [StickerItem]] = [
+        .all: [],
         .qq: [],
         .wechat: [],
     ]
     @Published private(set) var sourceFolderCount: [StickerPlatform: Int] = [
+        .all: 0,
         .qq: 0,
         .wechat: 0,
     ]
@@ -66,9 +76,10 @@ final class StickerStore: ObservableObject {
             sourceFolderCount = result.sourceFolderCount
             isScanning = false
 
+            let allCount = result.stickersByPlatform[.all, default: []].count
             let qqCount = result.stickersByPlatform[.qq, default: []].count
             let wechatCount = result.stickersByPlatform[.wechat, default: []].count
-            lastMessage = "Detected \(qqCount) QQ stickers and \(wechatCount) WeChat stickers."
+            lastMessage = "Detected \(allCount) stickers total, including \(qqCount) QQ and \(wechatCount) WeChat."
         }
     }
 
@@ -91,6 +102,8 @@ final class StickerStore: ObservableObject {
     func sourceSummary(for platform: StickerPlatform) -> String {
         let stickerCount = stickersByPlatform[platform, default: []].count
         let folderCount = sourceFolderCount[platform, default: 0]
-        return "\(stickerCount) stickers from \(folderCount) folders"
+        return platform == .all
+            ? "\(stickerCount) stickers from \(folderCount) sources"
+            : "\(stickerCount) stickers from \(folderCount) folders"
     }
 }

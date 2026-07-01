@@ -23,7 +23,7 @@ struct StickerVaultApp: App {
 
 struct StickerVaultView: View {
     @ObservedObject var store: StickerStore
-    @State private var selectedPlatform: StickerPlatform = .qq
+    @State private var selectedPlatform: StickerPlatform = .all
     private let columns = [GridItem(.adaptive(minimum: 84, maximum: 120), spacing: 12)]
 
     var body: some View {
@@ -83,6 +83,9 @@ struct StickerVaultView: View {
 
     private var platformTabs: some View {
         TabView(selection: $selectedPlatform) {
+            platformGrid(.all)
+                .tabItem { Text("All") }
+                .tag(StickerPlatform.all)
             platformGrid(.qq)
                 .tabItem { Text("QQ") }
                 .tag(StickerPlatform.qq)
@@ -104,7 +107,7 @@ struct StickerVaultView: View {
                     Text(platform.emptyMessage)
                         .font(.callout)
                         .foregroundStyle(.secondary)
-                    Text("Click Refresh after opening \(platform.rawValue) at least once on this Mac.")
+                    Text(platform == .all ? "Click Refresh to rescan local sticker sources." : "Click Refresh after opening \(platform.rawValue) at least once on this Mac.")
                         .font(.caption)
                         .foregroundStyle(.tertiary)
                         .multilineTextAlignment(.center)
@@ -115,7 +118,7 @@ struct StickerVaultView: View {
                     LazyVGrid(columns: columns, spacing: 12) {
                         ForEach(items) { item in
                             StickerCell(item: item, url: store.imageURL(for: item)) {
-                                if ClipboardService.copyImage(at: store.imageURL(for: item)) {
+                                if ClipboardService.copySticker(at: store.imageURL(for: item)) {
                                     store.lastMessage = "Copied \(item.displayName) from \(platform.rawValue)."
                                 } else {
                                     store.lastMessage = "Failed to copy \(item.displayName)."
@@ -137,34 +140,43 @@ struct StickerCell: View {
 
     var body: some View {
         VStack(spacing: 8) {
-            Button(action: onCopy) {
-                ZStack {
-                    RoundedRectangle(cornerRadius: 14)
-                        .fill(Color(nsColor: .controlBackgroundColor))
-                    if let image = NSImage(contentsOf: url) {
-                        Image(nsImage: image)
-                            .resizable()
-                            .scaledToFit()
-                            .padding(8)
-                    } else {
-                        Image(systemName: "photo")
-                            .font(.title2)
-                            .foregroundStyle(.secondary)
-                    }
+            ZStack {
+                RoundedRectangle(cornerRadius: 14)
+                    .fill(Color(nsColor: .controlBackgroundColor))
+                if let image = NSImage(contentsOf: url) {
+                    Image(nsImage: image)
+                        .resizable()
+                        .scaledToFit()
+                        .padding(8)
+                } else {
+                    Image(systemName: "photo")
+                        .font(.title2)
+                        .foregroundStyle(.secondary)
                 }
-                .frame(height: 86)
             }
-            .buttonStyle(.plain)
-            .help("Click to copy to clipboard")
+            .frame(height: 86)
+            .help("Click to copy to clipboard, or drag the file into a chat app")
 
             VStack(alignment: .leading, spacing: 2) {
                 Text(item.displayName)
                     .font(.caption)
                     .lineLimit(1)
-                Text(item.collectionName)
-                    .font(.caption2)
-                    .foregroundStyle(.secondary)
-                    .lineLimit(1)
+                HStack(spacing: 6) {
+                    Text(item.collectionName)
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                    Spacer(minLength: 0)
+                    Text(item.fileTypeLabel)
+                        .font(.caption2.monospaced())
+                        .foregroundStyle(.secondary)
+                        .padding(.horizontal, 6)
+                        .padding(.vertical, 2)
+                        .background(
+                            Capsule()
+                                .fill(Color(nsColor: .controlBackgroundColor))
+                        )
+                }
             }
             .frame(maxWidth: .infinity, alignment: .leading)
         }
@@ -173,5 +185,11 @@ struct StickerCell: View {
             RoundedRectangle(cornerRadius: 16)
                 .fill(Color(nsColor: .underPageBackgroundColor))
         )
+        .contentShape(RoundedRectangle(cornerRadius: 16))
+        .onTapGesture(perform: onCopy)
+        .onDrag {
+            NSItemProvider(contentsOf: url) ?? NSItemProvider()
+        }
+        .help("Click to copy to clipboard, or drag the file into a chat app")
     }
 }

@@ -14,10 +14,12 @@ struct StickerSourceScanner {
 
     func scan() -> StickerScanResult {
         var stickersByPlatform: [StickerPlatform: [StickerItem]] = [
+            .all: [],
             .qq: [],
             .wechat: [],
         ]
         var sourceFolderCount: [StickerPlatform: Int] = [
+            .all: 0,
             .qq: 0,
             .wechat: 0,
         ]
@@ -34,6 +36,9 @@ struct StickerSourceScanner {
         let wechatResult = wechatRecovery.preparedRecoveredRoots()
         sourceFolderCount[.wechat] = wechatResult.sourceRootCount
         stickersByPlatform[.wechat] = normalizedWeChatStickers(from: wechatResult.roots)
+
+        stickersByPlatform[.all] = stickersByPlatform[.qq, default: []] + stickersByPlatform[.wechat, default: []]
+        sourceFolderCount[.all] = sourceFolderCount[.qq, default: 0] + sourceFolderCount[.wechat, default: 0]
 
         for platform in StickerPlatform.allCases {
             stickersByPlatform[platform] = stickersByPlatform[platform, default: []]

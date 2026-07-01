@@ -1,6 +1,8 @@
 .DS_Store
+.idea/
 __pycache__/
 *.pyc
+.build/
 
 mememover_export/
 RecoveredFavorites/

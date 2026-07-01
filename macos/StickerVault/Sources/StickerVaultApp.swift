@@ -92,6 +92,12 @@ struct StickerVaultView: View {
             platformGrid(.wechat)
                 .tabItem { Text("WeChat") }
                 .tag(StickerPlatform.wechat)
+            platformGrid(.telegram)
+                .tabItem { Text("Telegram") }
+                .tag(StickerPlatform.telegram)
+            platformGrid(.whatsapp)
+                .tabItem { Text("WhatsApp") }
+                .tag(StickerPlatform.whatsapp)
         }
     }
 
@@ -101,7 +107,7 @@ struct StickerVaultView: View {
         return Group {
             if items.isEmpty {
                 VStack(spacing: 10) {
-                    Image(systemName: platform == .qq ? "bubble.left.and.bubble.right" : "message")
+                    Image(systemName: platformSymbol(for: platform))
                         .font(.title2)
                         .foregroundStyle(.secondary)
                     Text(platform.emptyMessage)
@@ -117,8 +123,12 @@ struct StickerVaultView: View {
                 ScrollView {
                     LazyVGrid(columns: columns, spacing: 12) {
                         ForEach(items) { item in
-                            StickerCell(item: item, url: store.imageURL(for: item)) {
-                                if ClipboardService.copySticker(at: store.imageURL(for: item)) {
+                            StickerCell(
+                                item: item,
+                                sourceURL: store.sourceURL(for: item),
+                                previewURL: store.previewURL(for: item)
+                            ) {
+                                if ClipboardService.copySticker(at: store.sourceURL(for: item)) {
                                     store.lastMessage = "Copied \(item.displayName) from \(platform.rawValue)."
                                 } else {
                                     store.lastMessage = "Failed to copy \(item.displayName)."
@@ -131,11 +141,27 @@ struct StickerVaultView: View {
             }
         }
     }
+
+    private func platformSymbol(for platform: StickerPlatform) -> String {
+        switch platform {
+        case .all:
+            return "square.grid.2x2"
+        case .qq:
+            return "bubble.left.and.bubble.right"
+        case .wechat:
+            return "message"
+        case .telegram:
+            return "paperplane"
+        case .whatsapp:
+            return "phone.bubble"
+        }
+    }
 }
 
 struct StickerCell: View {
     let item: StickerItem
-    let url: URL
+    let sourceURL: URL
+    let previewURL: URL
     let onCopy: () -> Void
 
     var body: some View {
@@ -143,7 +169,7 @@ struct StickerCell: View {
             ZStack {
                 RoundedRectangle(cornerRadius: 14)
                     .fill(Color(nsColor: .controlBackgroundColor))
-                if let image = NSImage(contentsOf: url) {
+                if let image = NSImage(contentsOf: previewURL) {
                     Image(nsImage: image)
                         .resizable()
                         .scaledToFit()
@@ -188,7 +214,7 @@ struct StickerCell: View {
         .contentShape(RoundedRectangle(cornerRadius: 16))
         .onTapGesture(perform: onCopy)
         .onDrag {
-            NSItemProvider(contentsOf: url) ?? NSItemProvider()
+            NSItemProvider(contentsOf: sourceURL) ?? NSItemProvider()
         }
         .help("Click to copy to clipboard, or drag the file into a chat app")
     }

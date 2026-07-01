@@ -17,11 +17,15 @@ struct StickerSourceScanner {
             .all: [],
             .qq: [],
             .wechat: [],
+            .telegram: [],
+            .whatsapp: [],
         ]
         var sourceFolderCount: [StickerPlatform: Int] = [
             .all: 0,
             .qq: 0,
             .wechat: 0,
+            .telegram: 0,
+            .whatsapp: 0,
         ]
 
         let qqRoots = qqCandidateRoots()
@@ -37,8 +41,28 @@ struct StickerSourceScanner {
         sourceFolderCount[.wechat] = wechatResult.sourceRootCount
         stickersByPlatform[.wechat] = normalizedWeChatStickers(from: wechatResult.roots)
 
-        stickersByPlatform[.all] = stickersByPlatform[.qq, default: []] + stickersByPlatform[.wechat, default: []]
-        sourceFolderCount[.all] = sourceFolderCount[.qq, default: 0] + sourceFolderCount[.wechat, default: 0]
+        let telegramRoots = telegramCandidateRoots()
+        sourceFolderCount[.telegram] = telegramRoots.count
+        stickersByPlatform[.telegram] = normalizedTelegramStickers(from: telegramRoots)
+
+        let whatsappRoots = whatsappCandidateRoots()
+        sourceFolderCount[.whatsapp] = whatsappRoots.count
+        for root in whatsappRoots {
+            stickersByPlatform[.whatsapp, default: []].append(
+                contentsOf: scanFiles(in: root, platform: .whatsapp, collectionName: root.lastPathComponent)
+            )
+        }
+
+        stickersByPlatform[.all] =
+            stickersByPlatform[.qq, default: []] +
+            stickersByPlatform[.wechat, default: []] +
+            stickersByPlatform[.telegram, default: []] +
+            stickersByPlatform[.whatsapp, default: []]
+        sourceFolderCount[.all] =
+            sourceFolderCount[.qq, default: 0] +
+            sourceFolderCount[.wechat, default: 0] +
+            sourceFolderCount[.telegram, default: 0] +
+            sourceFolderCount[.whatsapp, default: 0]
 
         for platform in StickerPlatform.allCases {
             stickersByPlatform[platform] = stickersByPlatform[platform, default: []]
@@ -84,6 +108,7 @@ struct StickerSourceScanner {
                         platform: .wechat,
                         filename: cachedURL.lastPathComponent,
                         sourcePath: cachedURL.path,
+                        previewPath: cachedURL.path,
                         collectionName: root.lastPathComponent,
                         fileSize: Int64(values?.fileSize ?? 0)
                     )
@@ -112,6 +137,35 @@ struct StickerSourceScanner {
             .filter { fileManager.fileExists(atPath: $0.path) }
     }
 
+    private func whatsappCandidateRoots() -> [URL] {
+        let root = fileManager.homeDirectoryForCurrentUser
+            .appendingPathComponent("Library/Group Containers/group.net.whatsapp.WhatsApp.shared/stickers", isDirectory: true)
+
+        guard fileManager.fileExists(atPath: root.path) else {
+            return []
+        }
+        return [root]
+    }
+
+    private func telegramCandidateRoots() -> [URL] {
+        let base = fileManager.homeDirectoryForCurrentUser
+            .appendingPathComponent("Library/Group Containers/6N38VWS5BX.ru.keepcoder.Telegram/appstore", isDirectory: true)
+
+        guard let children = try? fileManager.contentsOfDirectory(
+            at: base,
+            includingPropertiesForKeys: [.isDirectoryKey],
+            options: [.skipsHiddenFiles]
+        ) else {
+            return []
+        }
+
+        return children
+            .filter { $0.lastPathComponent.hasPrefix("account-") }
+            .map { $0.appendingPathComponent("postbox/media", isDirectory: true) }
+            .filter { fileManager.fileExists(atPath: $0.path) }
+            .sorted { $0.path < $1.path }
+    }
+
     private func scanFiles(in root: URL, platform: StickerPlatform, collectionName: String) -> [StickerItem] {
         guard let enumerator = fileManager.enumerator(
             at: root,
@@ -133,10 +187,44 @@ struct StickerSourceScanner {
                     platform: platform,
                     filename: fileURL.lastPathComponent,
                     sourcePath: fileURL.path,
+                    previewPath: fileURL.path,
                     collectionName: collectionName,
                     fileSize: Int64(values?.fileSize ?? 0)
                 )
             )
+        }
+
+        return items
+    }
+
+    private func normalizedTelegramStickers(from roots: [URL]) -> [StickerItem] {
+        let recovery = TelegramRecoveryService()
+        let manifests = recovery.preparedManifestURLs(from: roots)
+        var items: [StickerItem] = []
+
+        for manifestURL in manifests {
+            guard
+                let data = try? Data(contentsOf: manifestURL),
+                let manifest = try? JSONDecoder().decode(TelegramRecoveryManifest.self, from: data)
+            else {
+                continue
+            }
+
+            let collectionName = manifestURL.deletingLastPathComponent().lastPathComponent
+            for entry in manifest.items {
+                guard let previewOutput = entry.previewOutput else { continue }
+                items.append(
+                    StickerItem(
+                        id: UUID(),
+                        platform: .telegram,
+                        filename: URL(fileURLWithPath: entry.stickerOutput).lastPathComponent,
+                        sourcePath: entry.stickerOutput,
+                        previewPath: previewOutput,
+                        collectionName: collectionName,
+                        fileSize: Int64(entry.size)
+                    )
+                )
+            }
         }
 
         return items
@@ -183,6 +271,22 @@ struct StickerSourceScanner {
 private struct WeChatRecoveryResult {
     let roots: [URL]
     let sourceRootCount: Int
+}
+
+private struct TelegramRecoveryManifest: Decodable {
+    struct Item: Decodable {
+        let stickerOutput: String
+        let previewOutput: String?
+        let size: Int
+
+        private enum CodingKeys: String, CodingKey {
+            case stickerOutput = "sticker_output"
+            case previewOutput = "preview_output"
+            case size
+        }
+    }
+
+    let items: [Item]
 }
 
 private struct WeChatRecoveryService {
@@ -323,6 +427,76 @@ private struct WeChatRecoveryService {
             }
         }
         return false
+    }
+
+    private func runProcess(executable: String, arguments: [String]) -> Bool {
+        let process = Process()
+        process.executableURL = URL(fileURLWithPath: executable)
+        process.arguments = arguments
+        process.standardOutput = Pipe()
+        process.standardError = Pipe()
+        do {
+            try process.run()
+            process.waitUntilExit()
+            return process.terminationStatus == 0
+        } catch {
+            return false
+        }
+    }
+}
+
+private struct TelegramRecoveryService {
+    private let fileManager = FileManager.default
+    private let appSupportRoot: URL
+
+    init() {
+        let appSupport = fileManager.urls(for: .applicationSupportDirectory, in: .userDomainMask).first!
+        appSupportRoot = appSupport.appendingPathComponent("StickerVault/Recovered/Telegram", isDirectory: true)
+        try? fileManager.createDirectory(at: appSupportRoot, withIntermediateDirectories: true)
+    }
+
+    func preparedManifestURLs(from roots: [URL]) -> [URL] {
+        guard let recoverScript = locateScript(named: "recover_telegram_stickers.py") else {
+            return []
+        }
+
+        var manifests: [URL] = []
+        for root in roots {
+            let accountName = root.deletingLastPathComponent().lastPathComponent
+            let accountRoot = appSupportRoot.appendingPathComponent(accountName, isDirectory: true)
+            let manifestURL = accountRoot.appendingPathComponent("manifest.json", isDirectory: false)
+
+            try? fileManager.removeItem(at: accountRoot)
+            try? fileManager.createDirectory(at: accountRoot, withIntermediateDirectories: true)
+            _ = runProcess(
+                executable: "/usr/bin/env",
+                arguments: ["python3", recoverScript.path, root.path, "--output-dir", accountRoot.path]
+            )
+
+            if fileManager.fileExists(atPath: manifestURL.path) {
+                manifests.append(manifestURL)
+            }
+        }
+
+        return manifests.sorted { $0.path < $1.path }
+    }
+
+    private func locateScript(named filename: String) -> URL? {
+        let cwd = URL(fileURLWithPath: fileManager.currentDirectoryPath, isDirectory: true)
+        var searchBases: [URL] = [cwd]
+        var cursor = cwd
+        for _ in 0..<6 {
+            cursor.deleteLastPathComponent()
+            searchBases.append(cursor)
+        }
+
+        for base in searchBases {
+            let candidate = base.appendingPathComponent(filename, isDirectory: false).standardizedFileURL
+            if fileManager.fileExists(atPath: candidate.path) {
+                return candidate
+            }
+        }
+        return nil
     }
 
     private func runProcess(executable: String, arguments: [String]) -> Bool {

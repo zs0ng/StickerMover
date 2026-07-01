@@ -4,6 +4,8 @@ enum StickerPlatform: String, CaseIterable, Identifiable {
     case all = "All"
     case qq = "QQ"
     case wechat = "WeChat"
+    case telegram = "Telegram"
+    case whatsapp = "WhatsApp"
 
     var id: String { rawValue }
 
@@ -15,6 +17,10 @@ enum StickerPlatform: String, CaseIterable, Identifiable {
             return "No QQ personal emoji found on this Mac yet."
         case .wechat:
             return "No WeChat sticker previews found on this Mac yet."
+        case .telegram:
+            return "No Telegram sticker previews found on this Mac yet."
+        case .whatsapp:
+            return "No WhatsApp stickers found on this Mac yet."
         }
     }
 }
@@ -24,6 +30,7 @@ struct StickerItem: Hashable, Identifiable {
     let platform: StickerPlatform
     let filename: String
     let sourcePath: String
+    let previewPath: String
     let collectionName: String
     let fileSize: Int64
 
@@ -49,14 +56,18 @@ final class StickerStore: ObservableObject {
         .all: [],
         .qq: [],
         .wechat: [],
+        .telegram: [],
+        .whatsapp: [],
     ]
     @Published private(set) var sourceFolderCount: [StickerPlatform: Int] = [
         .all: 0,
         .qq: 0,
         .wechat: 0,
+        .telegram: 0,
+        .whatsapp: 0,
     ]
     @Published var searchText = ""
-    @Published var lastMessage = "Scanning local QQ and WeChat sticker sources..."
+    @Published var lastMessage = "Scanning local sticker sources..."
     @Published var isScanning = false
 
     init() {
@@ -65,7 +76,7 @@ final class StickerStore: ObservableObject {
 
     func refreshDetectedSources() {
         isScanning = true
-        lastMessage = "Scanning local QQ and WeChat sticker sources..."
+        lastMessage = "Scanning local sticker sources..."
 
         Task {
             let result = await Task.detached(priority: .userInitiated) {
@@ -79,7 +90,9 @@ final class StickerStore: ObservableObject {
             let allCount = result.stickersByPlatform[.all, default: []].count
             let qqCount = result.stickersByPlatform[.qq, default: []].count
             let wechatCount = result.stickersByPlatform[.wechat, default: []].count
-            lastMessage = "Detected \(allCount) stickers total, including \(qqCount) QQ and \(wechatCount) WeChat."
+            let telegramCount = result.stickersByPlatform[.telegram, default: []].count
+            let whatsappCount = result.stickersByPlatform[.whatsapp, default: []].count
+            lastMessage = "Detected \(allCount) stickers total: QQ \(qqCount), WeChat \(wechatCount), Telegram \(telegramCount), WhatsApp \(whatsappCount)."
         }
     }
 
@@ -95,8 +108,12 @@ final class StickerStore: ObservableObject {
         }
     }
 
-    func imageURL(for item: StickerItem) -> URL {
+    func sourceURL(for item: StickerItem) -> URL {
         URL(fileURLWithPath: item.sourcePath)
+    }
+
+    func previewURL(for item: StickerItem) -> URL {
+        URL(fileURLWithPath: item.previewPath)
     }
 
     func sourceSummary(for platform: StickerPlatform) -> String {

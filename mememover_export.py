@@ -96,7 +96,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--output-dir",
         type=Path,
-        default=Path("mememover_export"),
+        default=Path("test/mememover_export"),
         help="Directory where export files are written",
     )
     return parser.parse_args()

@@ -52,11 +52,11 @@ def md5_from_url(url: str) -> str:
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser()
     parser.add_argument("favorites_json", type=Path, help="Path to favorites.json")
-    parser.add_argument("--output-dir", type=Path, default=Path("RecoveredFavorites"))
+    parser.add_argument("--output-dir", type=Path, default=Path("test/RecoveredFavorites"))
     parser.add_argument(
         "--manifest",
         type=Path,
-        default=Path("recovered_favorites_manifest.json"),
+        default=Path("test/recovered_favorites_manifest.json"),
         help="Path to output manifest JSON",
     )
     return parser.parse_args()
